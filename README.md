@@ -1,6 +1,9 @@
 # flutter_application_1
 
-A new Flutter project.
+En proceso.
+
+Proyecto de la materia seminario de actualizacion.
+
 
 ## Getting Started
 
