@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'login_screen.dart'; // IMPORTANTE: tu LoginScreen
+import 'GastoScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   final User user;
@@ -11,96 +13,57 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  double _saldoActual = 0.0;
 
-  final CollectionReference _usuariosRef = FirebaseFirestore.instance
-      .collection('usuarios');
+  // Referencia a la colección de movimientos en Firestore
+  final CollectionReference _movimientosRef =
+      FirebaseFirestore.instance.collection('movimientos');
 
-  // ===================
-  // FUNCIONES CRUD
-  // ===================
+  @override
+  void initState() {
+    super.initState();
+    _cargarSaldo();
+  }
 
-  Future<void> _alta() async {
-    final datos = await _pedirDatosUsuario(context, title: 'Alta de usuario');
-    if (datos == null) return; // cancelado
+  Future<void> _cargarSaldo() async {
+    final snapshot = await _movimientosRef.get();
+    double saldo = 0.0;
 
-    await _usuariosRef.add({
-      'nombre': datos['nombre'],
-      'apellido': datos['apellido'],
-      'dni': datos['dni'],
-      'email': datos['email'],
-      'timestamp': FieldValue.serverTimestamp(),
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final monto = (data['monto'] ?? 0).toDouble();
+      saldo += monto;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _saldoActual = saldo;
     });
   }
 
-  Future<void> _baja(String docId) async {
-    await _usuariosRef.doc(docId).delete();
-  }
-
-  Future<void> _modificacion(String docId, Map<String, dynamic> oldData) async {
-    final datos = await _pedirDatosUsuario(
-      context,
-      title: 'Modificar usuario',
-      initial: oldData,
-    );
-    if (datos == null) return;
-
-    await _usuariosRef.doc(docId).update({
-      'nombre': datos['nombre'],
-      'apellido': datos['apellido'],
-      'dni': datos['dni'],
-      'email': datos['email'],
+  Future<void> _agregarMovimiento(double monto) async {
+    await _movimientosRef.add({
+      'monto': monto,
+      'fecha': FieldValue.serverTimestamp(),
     });
+    _cargarSaldo();
   }
 
-  // ===================
-  // DIALOGO DE FORMULARIO
-  // ===================
+  void _mostrarDialogoMovimiento({required bool esIngreso}) {
+    final TextEditingController _montoController = TextEditingController();
 
-  Future<Map<String, String>?> _pedirDatosUsuario(
-    BuildContext context, {
-    required String title,
-    Map<String, dynamic>? initial,
-  }) async {
-    final nombreController = TextEditingController(
-      text: initial?['nombre'] ?? '',
-    );
-    final apellidoController = TextEditingController(
-      text: initial?['apellido'] ?? '',
-    );
-    final dniController = TextEditingController(text: initial?['dni'] ?? '');
-    final emailController = TextEditingController(
-      text: initial?['email'] ?? '',
-    );
-
-    return await showDialog<Map<String, String>>(
+    showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: nombreController,
-                  decoration: const InputDecoration(labelText: 'Nombre'),
-                ),
-                TextField(
-                  controller: apellidoController,
-                  decoration: const InputDecoration(labelText: 'Apellido'),
-                ),
-                TextField(
-                  controller: dniController,
-                  decoration: const InputDecoration(labelText: 'DNI'),
-                  keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-              ],
+          title: Text(esIngreso ? 'Registrar Ingreso' : 'Registrar Gasto'),
+          content: TextField(
+            controller: _montoController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Monto',
+              prefixIcon: Icon(Icons.attach_money),
             ),
           ),
           actions: [
@@ -110,14 +73,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop({
-                  'nombre': nombreController.text.trim(),
-                  'apellido': apellidoController.text.trim(),
-                  'dni': dniController.text.trim(),
-                  'email': emailController.text.trim(),
-                });
+                final texto = _montoController.text.trim();
+                if (texto.isNotEmpty) {
+                  final monto = double.tryParse(texto) ?? 0.0;
+                  if (monto > 0) {
+                    _agregarMovimiento(esIngreso ? monto : -monto);
+                  }
+                }
+                Navigator.of(context).pop();
               },
-              child: const Text('Aceptar'),
+              child: const Text('Guardar'),
             ),
           ],
         );
@@ -125,166 +90,108 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===================
-  // UI
-  // ===================
+  void _cerrarSesion() async {
+    await FirebaseAuth.instance.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (Route<dynamic> route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pantalla principal'),
+        backgroundColor: Colors.purple, // fondo violeta
+        title: const Text(
+          "Control de Gastos",
+          style: TextStyle(color: Colors.white),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              Navigator.of(context).pop();
-            },
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: _cerrarSesion,
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: Center(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // BOTÓN DE ALTA
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(onPressed: _alta, child: const Text('Alta')),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // BUSCADOR
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Buscar por nombre o DNI',
-                border: OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.search),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim().toLowerCase();
-                });
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            // LISTADO
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream:
-                    _usuariosRef
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text('No hay datos.'));
-                  }
-
-                  final filteredDocs =
-                      snapshot.data!.docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-
-                        final nombre =
-                            (data['nombre'] ?? '').toString().toLowerCase();
-                        final dni =
-                            (data.containsKey('dni') ? data['dni'] ?? '' : '')
-                                .toString()
-                                .toLowerCase();
-
-                        return nombre.contains(_searchQuery) ||
-                            dni.contains(_searchQuery);
-                      }).toList();
-
-                  return ListView.builder(
-                    itemCount: filteredDocs.length,
-                    itemBuilder: (context, index) {
-                      final doc = filteredDocs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          title: Text(
-                            '${data['nombre'] ?? ''} ${data['apellido'] ?? ''}',
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('DNI: ${data['dni'] ?? ''}'),
-                              Text('Email: ${data['email'] ?? ''}'),
-                              Text('ID: ${doc.id}'),
-                            ],
-                          ),
-                          isThreeLine: true,
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit,
-                                  color: Colors.blue,
-                                ),
-                                onPressed: () => _modificacion(doc.id, data),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed:
-                                    () => _confirmarBaja(context, doc.id),
-                              ),
-                            ],
-                          ),
+            // Barra circular con saldo
+            SizedBox(
+              height: 200,
+              width: 200,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: 1.0,
+                    strokeWidth: 12,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        _saldoActual >= 0 ? Colors.green : Colors.red),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "Saldo Actual",
+                        style: TextStyle(fontSize: 18),
+                      ),
+                      Text(
+                        "\$${_saldoActual.toStringAsFixed(2)}",
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    },
-                  );
-                },
+                      ),
+                    ],
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(height: 40),
+
+            // Botones de gasto (+) e ingreso (−) más grandes
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(28),
+                  ),
+                 onPressed: () async {
+    final valor = await Navigator.of(context).push<double>(
+      MaterialPageRoute(builder: (_) => const GastoScreen()),
+    );
+
+    if (valor != null && valor > 0) {
+      _agregarMovimiento(-valor); // guardalo en Firestore como gasto
+    }
+  },
+                  child: const Icon(Icons.remove, color: Colors.white, size: 32),
+                ),
+                const SizedBox(width: 40),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(28),
+                  ),
+                  onPressed: () => _mostrarDialogoMovimiento(esIngreso: true),
+                  child: const Icon(Icons.add, color: Colors.white, size: 32),
+                ),
+              ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  void _confirmarBaja(BuildContext context, String docId) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Eliminar usuario'),
-          content: const Text('¿Estás seguro de eliminar este usuario?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                _baja(docId);
-                Navigator.of(context).pop();
-              },
-              child: const Text(
-                'Eliminar',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
