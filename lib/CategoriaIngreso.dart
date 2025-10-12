@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class CategoriaIngresoScreen extends StatelessWidget {
-  const CategoriaIngresoScreen({super.key});
+class CategoriaIngreso extends StatelessWidget {
+  const CategoriaIngreso({super.key});
 
   @override
   Widget build(BuildContext context) {

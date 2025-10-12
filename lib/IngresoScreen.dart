@@ -30,14 +30,12 @@ class _IngresoScreenState extends State<IngresoScreen> {
   if (_monto.isNotEmpty) {
     final double valor = double.parse(_monto);
 
-    // Redirigir a la pantalla de categoría
+    // Redirigir a la pantalla de categoría y retornar valor + categoría a HomeScreen
     Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const CategoriaIngresoScreen()),
+      MaterialPageRoute(builder: (_) => const CategoriaIngreso()),
     ).then((categoria) {
       if (categoria != null) {
-        // Aquí podés guardar en Firestore el monto + categoría
-        print("Monto: $valor, Categoría: $categoria");
-        Navigator.of(context).pop(valor); // retorna el valor a HomeScreen
+        Navigator.of(context).pop({"valor": valor, "categoria": categoria});
       }
     });
   }

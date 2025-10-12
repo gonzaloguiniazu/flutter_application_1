@@ -3,6 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart'; // IMPORTANTE: tu LoginScreen
 import 'GastoScreen.dart';
+import 'IngresoScreen.dart';
+import 'CategoriaIngreso.dart';
+import 'CategoriaGasto.dart';
+import 'dart:math';
+
 
 class HomeScreen extends StatefulWidget {
   final User user;
@@ -15,9 +20,26 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   double _saldoActual = 0.0;
 
-  // Referencia a la colección de movimientos en Firestore
   final CollectionReference _movimientosRef =
       FirebaseFirestore.instance.collection('movimientos');
+
+  // ===== CONFIGURACIÓN DEL CÍRCULO =====
+  double diametro = 340; // tamaño total del círculo
+  double anchoBarra = 40; // grosor del anillo
+  double distanciaIconos = 120; // distancia del centro a los íconos
+
+  // ===== CATEGORÍAS DE GASTOS =====
+  final Map<String, Map<String, dynamic>> categorias = {
+    'Alimentación': {'color': Colors.red, 'icon': Icons.restaurant},
+    'Transporte': {'color': Colors.blue, 'icon': Icons.directions_car},
+    'Entretenimiento': {'color': Colors.purple, 'icon': Icons.movie},
+    'Salud': {'color': Colors.pink, 'icon': Icons.local_hospital},
+    'Automóvil': {'color': Colors.grey, 'icon': Icons.directions_car_filled},
+    'Facturas': {'color': Colors.yellow, 'icon': Icons.receipt_long},
+    'Mascotas': {'color': Colors.green.shade800, 'icon': Icons.pets},
+    'Ropa': {'color': Colors.lightBlue, 'icon': Icons.checkroom},
+    'Familia': {'color': Colors.green.shade400, 'icon': Icons.family_restroom},
+  };
 
   @override
   void initState() {
@@ -36,84 +58,25 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (!mounted) return;
-
-    setState(() {
-      _saldoActual = saldo;
-    });
-  }
-
-  Future<void> _agregarMovimiento(double monto) async {
-    await _movimientosRef.add({
-      'monto': monto,
-      'fecha': FieldValue.serverTimestamp(),
-    });
-    _cargarSaldo();
-  }
-
-  void _mostrarDialogoMovimiento({required bool esIngreso}) {
-    final TextEditingController _montoController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(esIngreso ? 'Registrar Ingreso' : 'Registrar Gasto'),
-          content: TextField(
-            controller: _montoController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Monto',
-              prefixIcon: Icon(Icons.attach_money),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                final texto = _montoController.text.trim();
-                if (texto.isNotEmpty) {
-                  final monto = double.tryParse(texto) ?? 0.0;
-                  if (monto > 0) {
-                    _agregarMovimiento(esIngreso ? monto : -monto);
-                  }
-                }
-                Navigator.of(context).pop();
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (Route<dynamic> route) => false,
-    );
+    setState(() => _saldoActual = saldo);
   }
 
   @override
   Widget build(BuildContext context) {
+    final categoriasList = categorias.entries.toList();
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.purple, // fondo violeta
-        title: const Text(
-          "Control de Gastos",
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text("Control de Gastos"),
+        backgroundColor: Colors.purple,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: _cerrarSesion,
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              Navigator.pushNamedAndRemoveUntil(
+                  context, '/login', (route) => false);
+            },
           ),
         ],
       ),
@@ -121,20 +84,42 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Barra circular con saldo
+            // ===== GRÁFICO CIRCULAR DE CATEGORÍAS =====
             SizedBox(
-              height: 200,
-              width: 200,
+              height: diametro,
+              width: diametro,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  CircularProgressIndicator(
-                    value: 1.0,
-                    strokeWidth: 12,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                        _saldoActual >= 0 ? Colors.green : Colors.red),
+                  // Círculo colorido de categorías
+                  CustomPaint(
+                    size: Size(diametro, diametro),
+                    painter: CategoriaCirclePainter(
+                      categoriasList,
+                      anchoBarra: anchoBarra,
+                    ),
                   ),
+
+                  // Íconos distribuidos alrededor
+                  ...List.generate(categoriasList.length, (index) {
+                    final angle =
+                        (2 * pi / categoriasList.length) * index - pi / 2;
+                    final offset = Offset(
+                      (diametro / 2) + distanciaIconos * cos(angle),
+                      (diametro / 2) + distanciaIconos * sin(angle),
+                    );
+                    return Positioned(
+                      left: offset.dx - 14,
+                      top: offset.dy - 14,
+                      child: Icon(
+                        categoriasList[index].value['icon'],
+                        color: categoriasList[index].value['color'],
+                        size: 30,
+                      ),
+                    );
+                  }),
+
+                  // Texto del saldo actual
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -145,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         "\$${_saldoActual.toStringAsFixed(2)}",
                         style: const TextStyle(
-                          fontSize: 24,
+                          fontSize: 28,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -154,9 +139,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+
             const SizedBox(height: 40),
 
-            // Botones de gasto (+) e ingreso (−) más grandes
+            // ===== BOTONES DE INGRESO Y GASTO =====
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -164,28 +150,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(28),
+                    padding: const EdgeInsets.all(26),
                   ),
-                 onPressed: () async {
-    final valor = await Navigator.of(context).push<double>(
-      MaterialPageRoute(builder: (_) => const GastoScreen()),
-    );
-
-    if (valor != null && valor > 0) {
-      _agregarMovimiento(-valor); // guardalo en Firestore como gasto
-    }
-  },
-                  child: const Icon(Icons.remove, color: Colors.white, size: 32),
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/gasto');
+                  },
+                  child: const Icon(Icons.remove, color: Colors.white, size: 34),
                 ),
                 const SizedBox(width: 40),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(28),
+                    padding: const EdgeInsets.all(26),
                   ),
-                  onPressed: () => _mostrarDialogoMovimiento(esIngreso: true),
-                  child: const Icon(Icons.add, color: Colors.white, size: 32),
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/ingreso');
+                  },
+                  child: const Icon(Icons.add, color: Colors.white, size: 34),
                 ),
               ],
             ),
@@ -194,4 +176,38 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+// ===== PINTOR PERSONALIZADO DEL CÍRCULO =====
+class CategoriaCirclePainter extends CustomPainter {
+  final List<MapEntry<String, Map<String, dynamic>>> categorias;
+  final double anchoBarra;
+
+  CategoriaCirclePainter(this.categorias, {required this.anchoBarra});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = anchoBarra;
+
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    const double startAngleOffset = -pi / 2;
+    final total = categorias.length;
+    final sweepAngle = (2 * pi) / total;
+
+    for (int i = 0; i < total; i++) {
+      paint.color = categorias[i].value['color'];
+      canvas.drawArc(
+        rect,
+        startAngleOffset + (i * sweepAngle),
+        sweepAngle,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
