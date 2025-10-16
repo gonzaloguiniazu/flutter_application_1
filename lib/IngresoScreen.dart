@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'CategoriaIngreso.dart';
-
 
 class IngresoScreen extends StatefulWidget {
   const IngresoScreen({super.key});
@@ -10,152 +10,132 @@ class IngresoScreen extends StatefulWidget {
 }
 
 class _IngresoScreenState extends State<IngresoScreen> {
-  String _monto = '';
+  String _monto = "";
 
-  void _agregarDigito(String digito) {
+  void _agregarNumero(String numero) {
     setState(() {
-      if (_monto.length < 10) _monto += digito;
+      _monto += numero;
     });
   }
 
-  void _borrarDigito() {
-    setState(() {
-      if (_monto.isNotEmpty) {
+  void _borrarUltimo() {
+    if (_monto.isNotEmpty) {
+      setState(() {
         _monto = _monto.substring(0, _monto.length - 1);
-      }
-    });
+      });
+    }
   }
 
   void _ingresarMonto() {
-  if (_monto.isNotEmpty) {
-    final double valor = double.parse(_monto);
+    if (_monto.isNotEmpty) {
+      final double valor = double.parse(_monto);
 
-    // Redirigir a la pantalla de categoría y retornar valor + categoría a HomeScreen
-    Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const CategoriaIngreso()),
-    ).then((categoria) {
-      if (categoria != null) {
-        Navigator.of(context).pop({"valor": valor, "categoria": categoria});
-      }
-    });
-  }
-}
+      // Navega a la pantalla de categorías de ingreso pasando el monto
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CategoriaIngreso(
+            monto: _monto,
+            onCategoriaSeleccionada: (categoria) async {
+              await FirebaseFirestore.instance.collection('movimientos').add({
+                'monto': valor,
+                'categoria': categoria.toLowerCase(),
+                'fecha': FieldValue.serverTimestamp(),
+              });
 
-
-  Widget _buildTecla(String texto, {VoidCallback? onTap}) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(6.0),
-        child: ElevatedButton(
-          onPressed: onTap ?? () => _agregarDigito(texto),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 20),
-          ),
-          child: Text(
-            texto,
-            style: const TextStyle(fontSize: 24, color: Colors.white),
+              if (context.mounted) {
+                Navigator.popUntil(context, (route) => route.isFirst); // vuelve al Home
+              }
+            },
           ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
+        title: const Text("Registrar Ingreso"),
         backgroundColor: Colors.green,
-        title: const Text("Ingresar monto"),
-        centerTitle: true,
       ),
       body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const SizedBox(height: 20),
-          // Recuadro verde con el monto
+          // Monto mostrado arriba
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 40),
-            padding: const EdgeInsets.all(20),
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(24),
+            width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.green,
+              color: Colors.green.shade100,
               borderRadius: BorderRadius.circular(12),
             ),
-            alignment: Alignment.centerRight,
             child: Text(
               _monto.isEmpty ? "0" : _monto,
-              style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
             ),
           ),
-          const SizedBox(height: 30),
 
           // Teclado numérico
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    _buildTecla('1'),
-                    _buildTecla('2'),
-                    _buildTecla('3'),
-                  ],
-                ),
-                Row(
-                  children: [
-                    _buildTecla('4'),
-                    _buildTecla('5'),
-                    _buildTecla('6'),
-                  ],
-                ),
-                Row(
-                  children: [
-                    _buildTecla('7'),
-                    _buildTecla('8'),
-                    _buildTecla('9'),
-                  ],
-                ),
-                Row(
-                  children: [
-                    _buildTecla('←', onTap: _borrarDigito),
-                    _buildTecla('0'),
-                    Expanded(child: Container()), // espacio vacío
-                  ],
-                ),
-              ],
+            child: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 12,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+              ),
+              itemBuilder: (context, index) {
+                if (index == 9) return const SizedBox.shrink();
+                if (index == 10) {
+                  return _buildButton("0", () => _agregarNumero("0"));
+                }
+                if (index == 11) {
+                  return _buildButton("⌫", _borrarUltimo);
+                }
+                return _buildButton("${index + 1}", () => _agregarNumero("${index + 1}"));
+              },
             ),
           ),
 
           // Botón ingresar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: SizedBox(
-              width: double.infinity,
-              height: 60,
-              child: ElevatedButton(
-                onPressed: _ingresarMonto,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton(
+              onPressed: _ingresarMonto,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  "Ingresar",
-                  style: TextStyle(fontSize: 20, color: Colors.white),
-                ),
+              ),
+              child: const Text(
+                "Ingresar",
+                style: TextStyle(fontSize: 20, color: Colors.white),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildButton(String text, VoidCallback onPressed) {
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green.shade300,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onPressed,
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 24, color: Colors.white),
       ),
     );
   }
