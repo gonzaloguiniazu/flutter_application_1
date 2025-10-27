@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _gastosHoy = 0.0;
   Map<String, double> _gastosPorCategoria = {};
   late DateTime _fechaSeleccionada;
+  String _periodoActual = 'día';
 
   final CollectionReference _movimientosRef =
       FirebaseFirestore.instance.collection('movimientos');
@@ -66,7 +67,23 @@ class _HomeScreenState extends State<HomeScreen> {
     double ingresos = 0.0;
     double gastos = 0.0;
     Map<String, double> gastosPorCategoria = {};
-    final fechaFormato = DateFormat('yyyy-MM-dd').format(_fechaSeleccionada);
+
+    DateTime fechaInicio = _fechaSeleccionada;
+    DateTime fechaFin = _fechaSeleccionada;
+
+    if (_periodoActual == 'semana') {
+      fechaInicio = _fechaSeleccionada.subtract(Duration(days: _fechaSeleccionada.weekday - 1));
+      fechaFin = fechaInicio.add(const Duration(days: 6));
+    } else if (_periodoActual == 'mes') {
+      fechaInicio = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month, 1);
+      fechaFin = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + 1, 0);
+    } else if (_periodoActual == 'año') {
+      fechaInicio = DateTime(_fechaSeleccionada.year, 1, 1);
+      fechaFin = DateTime(_fechaSeleccionada.year, 12, 31);
+    }
+
+    String fechaInicioDia = DateFormat('yyyy-MM-dd').format(fechaInicio);
+    String fechaFinDia = DateFormat('yyyy-MM-dd').format(fechaFin);
 
     for (var doc in snapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
@@ -74,15 +91,18 @@ class _HomeScreenState extends State<HomeScreen> {
       saldo += monto;
 
       final fecha = (data['fecha'] as Timestamp?)?.toDate();
-      if (fecha != null && DateFormat('yyyy-MM-dd').format(fecha) == fechaFormato) {
-        if (monto > 0) {
-          ingresos += monto;
-        } else {
-          double montoAbsoluto = monto.abs();
-          gastos += montoAbsoluto;
+      if (fecha != null) {
+        String fechaDoc = DateFormat('yyyy-MM-dd').format(fecha);
+        if (fechaDoc.compareTo(fechaInicioDia) >= 0 && fechaDoc.compareTo(fechaFinDia) <= 0) {
+          if (monto > 0) {
+            ingresos += monto;
+          } else {
+            double montoAbsoluto = monto.abs();
+            gastos += montoAbsoluto;
 
-          String categoria = (data['categoria'] ?? 'otro').toString().toLowerCase();
-          gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] ?? 0) + montoAbsoluto;
+            String categoria = (data['categoria'] ?? 'otro').toString().toLowerCase();
+            gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] ?? 0) + montoAbsoluto;
+          }
         }
       }
     }
@@ -110,58 +130,96 @@ class _HomeScreenState extends State<HomeScreen> {
   void _deslizarDia(DragEndDetails details) {
     if (details.primaryVelocity! > 0) {
       setState(() {
-        _fechaSeleccionada = _fechaSeleccionada.subtract(const Duration(days: 1));
+        if (_periodoActual == 'día') {
+          _fechaSeleccionada = _fechaSeleccionada.subtract(const Duration(days: 1));
+        } else if (_periodoActual == 'semana') {
+          _fechaSeleccionada = _fechaSeleccionada.subtract(const Duration(days: 7));
+        } else if (_periodoActual == 'mes') {
+          _fechaSeleccionada = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month - 1);
+        } else if (_periodoActual == 'año') {
+          _fechaSeleccionada = DateTime(_fechaSeleccionada.year - 1);
+        }
       });
       _cargarSaldo();
     } else if (details.primaryVelocity! < 0) {
-      if (_fechaSeleccionada.isBefore(DateTime.now())) {
+      DateTime ahora = DateTime.now();
+      DateTime proximaFecha;
+
+      if (_periodoActual == 'día') {
+        proximaFecha = _fechaSeleccionada.add(const Duration(days: 1));
+      } else if (_periodoActual == 'semana') {
+        proximaFecha = _fechaSeleccionada.add(const Duration(days: 7));
+      } else if (_periodoActual == 'mes') {
+        proximaFecha = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + 1);
+      } else if (_periodoActual == 'año') {
+        proximaFecha = DateTime(_fechaSeleccionada.year + 1);
+      } else {
+        proximaFecha = ahora;
+      }
+
+      if (proximaFecha.isBefore(ahora) || proximaFecha.isAtSameMomentAs(ahora)) {
         setState(() {
-          _fechaSeleccionada = _fechaSeleccionada.add(const Duration(days: 1));
+          _fechaSeleccionada = proximaFecha;
         });
         _cargarSaldo();
       }
     }
   }
 
+  void _cambiarPeriodo(String periodo) {
+    setState(() {
+      _periodoActual = periodo;
+      _fechaSeleccionada = DateTime.now();
+    });
+    _cargarSaldo();
+  }
+
+  String _obtenerTextoFecha() {
+    if (_periodoActual == 'día') {
+      return DateFormat('EEEE, d MMMM', 'es_ES').format(_fechaSeleccionada);
+    } else if (_periodoActual == 'semana') {
+      DateTime inicio = _fechaSeleccionada.subtract(Duration(days: _fechaSeleccionada.weekday - 1));
+      DateTime fin = inicio.add(const Duration(days: 6));
+      return 'Semana: ${DateFormat('d MMM', 'es_ES').format(inicio)} - ${DateFormat('d MMM', 'es_ES').format(fin)}';
+    } else if (_periodoActual == 'mes') {
+      return DateFormat('MMMM y', 'es_ES').format(_fechaSeleccionada);
+    } else {
+      return DateFormat('y', 'es_ES').format(_fechaSeleccionada);
+    }
+  }
+
   Widget _buildProgressIndicator() {
+    const double barraWidth = 250.0;
+    const double barraHeight = 250.0;
+    const double barraStrokeWidth = 35.0;
+
     if (_gastosPorCategoria.isEmpty) {
-      return SizedBox.expand(
-        child: CircularProgressIndicator(
-          value: 1.0,
-          strokeWidth: 20,
-          backgroundColor: Colors.grey[300],
-          valueColor: const AlwaysStoppedAnimation<Color>(Colors.grey),
+      return Center(
+        child: SizedBox(
+          width: barraWidth,
+          height: barraHeight,
+          child: CustomPaint(
+            painter: _MultiColorProgressPainter(
+              segmentos: [],
+              coloresCategorias: coloresCategorias,
+              strokeWidth: barraStrokeWidth,
+            ),
+          ),
         ),
       );
     }
 
     List<MapEntry<String, double>> segmentos = _gastosPorCategoria.entries.toList();
 
-    if (segmentos.length == 1) {
-      Color colorGasto = coloresCategorias[segmentos[0].key] ?? Colors.grey;
-      return Center(
-        child: SizedBox(
-          width: 120,
-          height: 120,
-          child: CircularProgressIndicator(
-            value: 1.0,
-            strokeWidth: 20,
-            backgroundColor: Colors.grey[300],
-            valueColor: AlwaysStoppedAnimation<Color>(colorGasto),
-          ),
-        ),
-      );
-    }
-
     return Center(
       child: SizedBox(
-        width: 250,
-        height: 250,
+        width: barraWidth,
+        height: barraHeight,
         child: CustomPaint(
           painter: _MultiColorProgressPainter(
             segmentos: segmentos,
             coloresCategorias: coloresCategorias,
-            strokeWidth: 35,
+            strokeWidth: barraStrokeWidth,
           ),
         ),
       ),
@@ -170,8 +228,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fechaFormato = DateFormat('MM/dd').format(_fechaSeleccionada);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("ControlAR"),
@@ -187,18 +243,69 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                color: Colors.purple,
+              ),
+              child: const Text(
+                'Períodos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.today),
+              title: const Text('Día'),
+              onTap: () {
+                Navigator.pop(context);
+                _cambiarPeriodo('día');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_view_week),
+              title: const Text('Semana'),
+              onTap: () {
+                Navigator.pop(context);
+                _cambiarPeriodo('semana');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_today),
+              title: const Text('Mes'),
+              onTap: () {
+                Navigator.pop(context);
+                _cambiarPeriodo('mes');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month),
+              title: const Text('Año'),
+              onTap: () {
+                Navigator.pop(context);
+                _cambiarPeriodo('año');
+              },
+            ),
+          ],
+        ),
+      ),
       body: GestureDetector(
         onHorizontalDragEnd: _deslizarDia,
         child: Column(
           children: [
-            // Contenedor con la fecha
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               color: Colors.grey[200],
               child: Center(
                 child: Text(
-                  DateFormat('EEEE, d MMMM', 'es_ES').format(_fechaSeleccionada),
+                  _obtenerTextoFecha(),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -208,7 +315,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             
-            // Contenedor de la barra circular
             Expanded(
               child: Center(
                 child: Stack(
@@ -224,14 +330,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                fechaFormato,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
                               Text(
                                 "\$${_ingresosHoy.toStringAsFixed(2)}",
                                 style: const TextStyle(
@@ -257,7 +355,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             
-            // Contenedor con saldo y botones
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -307,50 +404,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Widget> _buildIconosAlrededor() {
-    if (_gastosPorCategoria.isEmpty) return [];
+    final List<Map<String, dynamic>> posiciones = [
+      {'categoria': 'alimentos', 'left': 157.0, 'top': -5.0},
+      {'categoria': 'transporte', 'left': 270.0, 'top': 25.0},
+      {'categoria': 'servicios', 'left': 295.0, 'top': 157.0},
+      {'categoria': 'automóvil', 'left': 270.0, 'top': 280.0},
+      {'categoria': 'facturas', 'left': 157.0, 'top': 305.0},
+      {'categoria': 'mascotas', 'left': 40.0, 'top': 280.0},
+      {'categoria': 'ropa', 'left': 15.0, 'top': 157.0},
+      {'categoria': 'familia', 'left': 40.0, 'top': 25.0},
+    ];
 
     List<Widget> widgets = [];
 
-    final List<Map<String, dynamic>> posiciones = [
-      {'left': 157.0, 'top': -20.0, 'angle': -pi / 2},
-      {'left': 285.0, 'top': 15.0, 'angle': -pi / 4},
-      {'left': 320.0, 'top': 157.0, 'angle': 0.0},
-      {'left': 285.0, 'top': 285.0, 'angle': pi / 4},
-      {'left': 157.0, 'top': 320.0, 'angle': pi / 2},
-      {'left': 15.0, 'top': 285.0, 'angle': 3 * pi / 4},
-      {'left': -20.0, 'top': 157.0, 'angle': pi},
-      {'left': 15.0, 'top': 15.0, 'angle': -3 * pi / 4},
-    ];
-
-    final List<MapEntry<String, double>> categorias =
-        _gastosPorCategoria.entries.toList();
-
-    for (int i = 0; i < categorias.length && i < posiciones.length; i++) {
-      Color colorCategoria = coloresCategorias[categorias[i].key] ?? Colors.grey;
-      IconData iconoCategoria =
-          iconosCategorias[categorias[i].key] ?? Icons.category;
-      double angle = posiciones[i]['angle'];
+    for (var pos in posiciones) {
+      String categoria = pos['categoria'];
+      Color colorCategoria = coloresCategorias[categoria] ?? Colors.grey;
+      IconData iconoCategoria = iconosCategorias[categoria] ?? Icons.category;
 
       widgets.add(
         Positioned(
-          left: posiciones[i]['left'] as double,
-          top: posiciones[i]['top'] as double,
+          left: pos['left'] as double,
+          top: pos['top'] as double,
           child: Icon(
             iconoCategoria,
             color: colorCategoria,
             size: 36,
-          ),
-        ),
-      );
-
-      widgets.add(
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _LineaPainter(
-              angle: angle,
-              color: colorCategoria,
-              posicion: posiciones[i],
-            ),
           ),
         ),
       );
@@ -376,86 +455,64 @@ class _MultiColorProgressPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width / 2) - (strokeWidth / 2) - 5;
 
-    double totalGastos = segmentos.fold(0, (sum, entry) => sum + entry.value);
-
-    final bgPaint = Paint()
-      ..color = Colors.grey[300]!
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius, bgPaint);
-
-    double startAngle = -pi / 2;
-
-    for (var entry in segmentos) {
-      double porcentaje = entry.value / totalGastos;
-      double sweepAngle = porcentaje * 2 * pi;
-
-      Color color = coloresCategorias[entry.key] ?? Colors.grey;
-
-      final paint = Paint()
-        ..color = color
+    if (segmentos.isEmpty) {
+      final bgPaint = Paint()
+        ..color = Colors.grey[300]!
         ..strokeWidth = strokeWidth
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
 
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweepAngle,
-        false,
-        paint,
-      );
+      canvas.drawCircle(center, radius, bgPaint);
+      return;
+    }
 
-      startAngle += sweepAngle;
+    double totalGastos = segmentos.fold(0, (sum, entry) => sum + entry.value);
+
+    final List<String> ordenCategorias = [
+      'alimentos',
+      'transporte',
+      'servicios',
+      'automóvil',
+      'facturas',
+      'mascotas',
+      'ropa',
+      'familia',
+    ];
+
+    Map<String, double> gastosMap = {};
+    for (var entry in segmentos) {
+      gastosMap[entry.key] = entry.value;
+    }
+
+    double startAngle = -pi / 2;
+
+    for (String categoria in ordenCategorias) {
+      if (gastosMap.containsKey(categoria)) {
+        double monto = gastosMap[categoria]!;
+        double porcentaje = monto / totalGastos;
+        double sweepAngle = porcentaje * 2 * pi;
+
+        Color color = coloresCategorias[categoria] ?? Colors.grey;
+
+        final paint = Paint()
+          ..color = color
+          ..strokeWidth = strokeWidth
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round;
+
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: radius),
+          startAngle,
+          sweepAngle,
+          false,
+          paint,
+        );
+
+        startAngle += sweepAngle;
+      }
     }
   }
 
   @override
   bool shouldRepaint(_MultiColorProgressPainter oldDelegate) => true;
-}
-
-class _LineaPainter extends CustomPainter {
-  final double angle;
-  final Color color;
-  final Map<String, dynamic> posicion;
-
-  _LineaPainter({
-    required this.angle,
-    required this.color,
-    required this.posicion,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-     final center = Offset(size.width / 2, size.height / 2);
-    final iconCenterX = posicion['left'] + 10;
-    final iconCenterY = posicion['top'] + 10;
-
-    // Mover el punto inicial hacia el borde del icono
-    final distance = 2; // MODIFICA AQUÍ: aumenta para línea más corta, reduce para más larga
-    final startX = iconCenterX + (distance * cos(angle));
-    final startY = iconCenterY + (distance * sin(angle));
-
-
-    final radioBarraExterior = 125.0;
-
-    final bordeX = center.dx + radioBarraExterior * cos(angle);
-    final bordeY = center.dy + radioBarraExterior * sin(angle);
-
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawLine(
-       Offset(startX, startY),
-      Offset(bordeX, bordeY),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LineaPainter oldDelegate) => true;
 }
