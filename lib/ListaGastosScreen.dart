@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'GastoScreen.dart';
 
@@ -39,7 +40,12 @@ class _ListaGastosScreenState extends State<ListaGastosScreen> {
   }
 
   Future<void> _cargarGastos() async {
-    final snapshot = await FirebaseFirestore.instance.collection('movimientos').get();
+    final snapshot = await FirebaseFirestore.instance
+    .collection('usuarios')
+    .doc(FirebaseAuth.instance.currentUser!.uid)
+    .collection('movimientos')
+    .get();
+
     Map<String, List<Map<String, dynamic>>> gastosPorCategoria = {};
 
     DateTime fechaInicio = widget.fechaSeleccionada;

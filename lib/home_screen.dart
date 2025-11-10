@@ -6,6 +6,7 @@ import 'dart:math';
 import 'GastoScreen.dart';
 import 'IngresoScreen.dart';
 import 'ListaGastosScreen.dart';
+import 'ListaIngresosScreen.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -25,8 +26,11 @@ class _HomeScreenState extends State<HomeScreen> {
   late DateTime _fechaSeleccionada;
   String _periodoActual = 'día';
 
-  final CollectionReference _movimientosRef =
-      FirebaseFirestore.instance.collection('movimientos');
+  CollectionReference get _movimientosRef =>
+      FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(widget.user.uid)
+          .collection('movimientos');
 
   final Map<String, Color> coloresCategorias = {
     "alimentos": Colors.orange,
@@ -119,7 +123,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navegarAIngreso() async {
-    await Navigator.pushNamed(context, '/ingreso');
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const IngresoScreen()),
+    );
     _cargarSaldo();
   }
 
@@ -387,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 20),
                       Text(
-                        "Saldo : \$${_saldoActual.toStringAsFixed(2)}",
+                        'Saldo actual: \$${_saldoActual.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -403,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ListaGastosScreen(
+                              builder: (_) => ListaIngresosScreen(
                                 fechaSeleccionada: _fechaSeleccionada,
                                 periodo: _periodoActual,
                               ),

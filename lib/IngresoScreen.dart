@@ -1,141 +1,142 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'CategoriaIngreso.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class IngresoScreen extends StatefulWidget {
-  const IngresoScreen({super.key});
+  final String? ingresoId;
+  final double? montoInicial;
+  final String? categoriaInicial;
+
+  const IngresoScreen({
+    super.key,
+    this.ingresoId,
+    this.montoInicial,
+    this.categoriaInicial,
+  });
 
   @override
   State<IngresoScreen> createState() => _IngresoScreenState();
 }
 
 class _IngresoScreenState extends State<IngresoScreen> {
-  String _monto = "";
+  final TextEditingController _montoController = TextEditingController();
+  String? _categoriaSeleccionada;
 
-  void _agregarNumero(String numero) {
-    setState(() {
-      _monto += numero;
-    });
+  final List<String> _categorias = [
+    "sueldo",
+    "negocio",
+    "regalo",
+    "intereses",
+    "otro",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.montoInicial != null) {
+      _montoController.text = widget.montoInicial!.toStringAsFixed(2);
+    }
+
+    if (widget.categoriaInicial != null) {
+      _categoriaSeleccionada = widget.categoriaInicial;
+    }
   }
 
-  void _borrarUltimo() {
-    if (_monto.isNotEmpty) {
-      setState(() {
-        _monto = _monto.substring(0, _monto.length - 1);
+  Future<void> _guardarIngreso() async {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+
+    double? monto = double.tryParse(_montoController.text.replaceAll(',', '.'));
+    if (monto == null || monto <= 0) return;
+
+    String categoria = _categoriaSeleccionada ?? "otro";
+
+    if (widget.ingresoId != null) {
+      // EDITAR
+      await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(userId)
+          .collection('movimientos')
+          .doc(widget.ingresoId)
+          .update({
+        'monto': monto, // positivo porque es ingreso
+        'categoria': categoria.toLowerCase(),
+      });
+    } else {
+      // CREAR
+      await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(userId)
+          .collection('movimientos')
+          .add({
+        'monto': monto,
+        'categoria': categoria.toLowerCase(),
+        'fecha': Timestamp.now(),
       });
     }
-  }
 
-  void _ingresarMonto() {
-    if (_monto.isNotEmpty) {
-      final double valor = double.parse(_monto);
-
-      // Navega a la pantalla de categorías de ingreso pasando el monto
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CategoriaIngreso(
-            monto: _monto,
-            onCategoriaSeleccionada: (categoria) async {
-              await FirebaseFirestore.instance.collection('movimientos').add({
-                'monto': valor,
-                'categoria': categoria.toLowerCase(),
-                'fecha': FieldValue.serverTimestamp(),
-              });
-
-              if (context.mounted) {
-                Navigator.popUntil(context, (route) => route.isFirst); // vuelve al Home
-              }
-            },
-          ),
-        ),
-      );
-    }
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Registrar Ingreso"),
+        title: Text(widget.ingresoId == null ? 'Nuevo Ingreso' : 'Editar Ingreso'),
         backgroundColor: Colors.green,
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Monto mostrado arriba
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(24),
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.green.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _monto.isEmpty ? "0" : _monto,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
-            ),
-          ),
-
-          // Teclado numérico
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: 12,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Monto:", style: TextStyle(fontSize: 18)),
+            TextField(
+              controller: _montoController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: "Ej: 1500.00",
               ),
-              itemBuilder: (context, index) {
-                if (index == 9) return const SizedBox.shrink();
-                if (index == 10) {
-                  return _buildButton("0", () => _agregarNumero("0"));
-                }
-                if (index == 11) {
-                  return _buildButton("⌫", _borrarUltimo);
-                }
-                return _buildButton("${index + 1}", () => _agregarNumero("${index + 1}"));
+            ),
+            const SizedBox(height: 20),
+
+            const Text("Categoría:", style: TextStyle(fontSize: 18)),
+            DropdownButton<String>(
+              value: _categoriaSeleccionada,
+              hint: const Text("Seleccionar categoría"),
+              isExpanded: true,
+              items: _categorias.map((cat) {
+                return DropdownMenuItem(
+                  value: cat,
+                  child: Text(cat.toUpperCase()),
+                );
+              }).toList(),
+              onChanged: (valor) {
+                setState(() {
+                  _categoriaSeleccionada = valor;
+                });
               },
             ),
-          ),
 
-          // Botón ingresar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: ElevatedButton(
-              onPressed: _ingresarMonto,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            const Spacer(),
+
+            Center(
+              child: ElevatedButton(
+                onPressed: _guardarIngreso,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 40),
+                ),
+                child: Text(
+                  widget.ingresoId == null ? "Guardar" : "Actualizar",
+                  style: const TextStyle(fontSize: 18),
                 ),
               ),
-              child: const Text(
-                "Ingresar",
-                style: TextStyle(fontSize: 20, color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildButton(String text, VoidCallback onPressed) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.green.shade300,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      onPressed: onPressed,
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 24, color: Colors.white),
+            )
+          ],
+        ),
       ),
     );
   }

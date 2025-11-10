@@ -154,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     if (_esRegistro)
                     const Text(
-                      "Registrarse",
+                      "Create una cuenta",
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   if (_esRegistro) const SizedBox(height: 30),
