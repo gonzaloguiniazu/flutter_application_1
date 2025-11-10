@@ -3,7 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'CategoriaGasto.dart';
 
 class GastoScreen extends StatefulWidget {
-  const GastoScreen({super.key});
+  final String? gastoId;
+  final double? montoInicial;
+  final String? categoriaInicial;
+
+  const GastoScreen({
+    super.key,
+    this.gastoId,
+    this.montoInicial,
+    this.categoriaInicial,
+  });
 
   @override
   State<GastoScreen> createState() => _GastoScreenState();
@@ -11,6 +20,14 @@ class GastoScreen extends StatefulWidget {
 
 class _GastoScreenState extends State<GastoScreen> {
   String _monto = "";
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.montoInicial != null) {
+      _monto = widget.montoInicial!.toInt().toString();
+    }
+  }
 
   void _agregarNumero(String numero) {
     setState(() {
@@ -37,14 +54,26 @@ class _GastoScreenState extends State<GastoScreen> {
           builder: (_) => CategoriaGasto(
             monto: _monto,
             onCategoriaSeleccionada: (categoria) async {
-              await FirebaseFirestore.instance.collection('movimientos').add({
-                'monto': -valor, // negativo para gasto
-                'categoria': categoria.toLowerCase(),
-                'fecha': FieldValue.serverTimestamp(),
-              });
+              if (widget.gastoId != null) {
+                // Editar gasto existente
+                await FirebaseFirestore.instance
+                    .collection('movimientos')
+                    .doc(widget.gastoId)
+                    .update({
+                  'monto': -valor,
+                  'categoria': categoria.toLowerCase(),
+                });
+              } else {
+                // Crear nuevo gasto
+                await FirebaseFirestore.instance.collection('movimientos').add({
+                  'monto': -valor,
+                  'categoria': categoria.toLowerCase(),
+                  'fecha': FieldValue.serverTimestamp(),
+                });
+              }
 
               if (context.mounted) {
-                Navigator.popUntil(context, (route) => route.isFirst); // vuelve al Home
+                Navigator.popUntil(context, (route) => route.isFirst);
               }
             },
           ),
@@ -57,8 +86,51 @@ class _GastoScreenState extends State<GastoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Registrar Gasto"),
+        title: Text(widget.gastoId != null ? "Editar Gasto" : "Registrar Gasto"),
         backgroundColor: const Color.fromARGB(255, 216, 124, 233),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: widget.gastoId != null
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.white),
+                  onPressed: () async {
+                    final confirmar = await showDialog<bool>(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: const Text('Confirmar eliminación'),
+                          content: const Text('¿Estás seguro de que deseas eliminar este gasto?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (confirmar == true && context.mounted) {
+                      await FirebaseFirestore.instance
+                          .collection('movimientos')
+                          .doc(widget.gastoId)
+                          .delete();
+
+                      if (context.mounted) {
+                        Navigator.popUntil(context, (route) => route.isFirst);
+                      }
+                    }
+                  },
+                ),
+              ]
+            : null,
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'GastoScreen.dart';
 import 'IngresoScreen.dart';
+import 'ListaGastosScreen.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -123,7 +124,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navegarAGasto() async {
-    await Navigator.pushNamed(context, '/gasto');
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const GastoScreen()),
+    );
     _cargarSaldo();
   }
 
@@ -361,13 +365,54 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Saldo actual: \$${_saldoActual.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Botón izquierdo para ver gastos
+                      IconButton(
+                        icon: const Icon(Icons.list_alt, size: 32),
+                        color: Colors.purple,
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ListaGastosScreen(
+                                fechaSeleccionada: _fechaSeleccionada,
+                                periodo: _periodoActual,
+                              ),
+                            ),
+                          );
+                          _cargarSaldo();
+                        },
+                      ),
+                      const SizedBox(width: 20),
+                      Text(
+                        "Saldo : \$${_saldoActual.toStringAsFixed(2)}",
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      // Botón derecho para ver gastos
+                      IconButton(
+                        icon: const Icon(Icons.list_alt, size: 32),
+                        color: Colors.purple,
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ListaGastosScreen(
+                                fechaSeleccionada: _fechaSeleccionada,
+                                periodo: _periodoActual,
+                              ),
+                            ),
+                          );
+                          _cargarSaldo();
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 30),
                   Row(
