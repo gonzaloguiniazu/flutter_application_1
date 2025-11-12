@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 
 import 'GastoScreen.dart';
 import 'IngresoScreen.dart';
@@ -26,11 +30,10 @@ class _HomeScreenState extends State<HomeScreen> {
   late DateTime _fechaSeleccionada;
   String _periodoActual = 'día';
 
-  CollectionReference get _movimientosRef =>
-      FirebaseFirestore.instance
-          .collection('usuarios')
-          .doc(widget.user.uid)
-          .collection('movimientos');
+  CollectionReference get _movimientosRef => FirebaseFirestore.instance
+      .collection('usuarios')
+      .doc(widget.user.uid)
+      .collection('movimientos');
 
   final Map<String, Color> coloresCategorias = {
     "alimentos": Colors.orange,
@@ -77,11 +80,21 @@ class _HomeScreenState extends State<HomeScreen> {
     DateTime fechaFin = _fechaSeleccionada;
 
     if (_periodoActual == 'semana') {
-      fechaInicio = _fechaSeleccionada.subtract(Duration(days: _fechaSeleccionada.weekday - 1));
+      fechaInicio = _fechaSeleccionada.subtract(
+        Duration(days: _fechaSeleccionada.weekday - 1),
+      );
       fechaFin = fechaInicio.add(const Duration(days: 6));
     } else if (_periodoActual == 'mes') {
-      fechaInicio = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month, 1);
-      fechaFin = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + 1, 0);
+      fechaInicio = DateTime(
+        _fechaSeleccionada.year,
+        _fechaSeleccionada.month,
+        1,
+      );
+      fechaFin = DateTime(
+        _fechaSeleccionada.year,
+        _fechaSeleccionada.month + 1,
+        0,
+      );
     } else if (_periodoActual == 'año') {
       fechaInicio = DateTime(_fechaSeleccionada.year, 1, 1);
       fechaFin = DateTime(_fechaSeleccionada.year, 12, 31);
@@ -98,15 +111,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final fecha = (data['fecha'] as Timestamp?)?.toDate();
       if (fecha != null) {
         String fechaDoc = DateFormat('yyyy-MM-dd').format(fecha);
-        if (fechaDoc.compareTo(fechaInicioDia) >= 0 && fechaDoc.compareTo(fechaFinDia) <= 0) {
+        if (fechaDoc.compareTo(fechaInicioDia) >= 0 &&
+            fechaDoc.compareTo(fechaFinDia) <= 0) {
           if (monto > 0) {
             ingresos += monto;
           } else {
             double montoAbsoluto = monto.abs();
             gastos += montoAbsoluto;
 
-            String categoria = (data['categoria'] ?? 'otro').toString().toLowerCase();
-            gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] ?? 0) + montoAbsoluto;
+            String categoria =
+                (data['categoria'] ?? 'otro').toString().toLowerCase();
+            gastosPorCategoria[categoria] =
+                (gastosPorCategoria[categoria] ?? 0) + montoAbsoluto;
           }
         }
       }
@@ -142,11 +158,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (details.primaryVelocity! > 0) {
       setState(() {
         if (_periodoActual == 'día') {
-          _fechaSeleccionada = _fechaSeleccionada.subtract(const Duration(days: 1));
+          _fechaSeleccionada = _fechaSeleccionada.subtract(
+            const Duration(days: 1),
+          );
         } else if (_periodoActual == 'semana') {
-          _fechaSeleccionada = _fechaSeleccionada.subtract(const Duration(days: 7));
+          _fechaSeleccionada = _fechaSeleccionada.subtract(
+            const Duration(days: 7),
+          );
         } else if (_periodoActual == 'mes') {
-          _fechaSeleccionada = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month - 1);
+          _fechaSeleccionada = DateTime(
+            _fechaSeleccionada.year,
+            _fechaSeleccionada.month - 1,
+          );
         } else if (_periodoActual == 'año') {
           _fechaSeleccionada = DateTime(_fechaSeleccionada.year - 1);
         }
@@ -161,14 +184,18 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (_periodoActual == 'semana') {
         proximaFecha = _fechaSeleccionada.add(const Duration(days: 7));
       } else if (_periodoActual == 'mes') {
-        proximaFecha = DateTime(_fechaSeleccionada.year, _fechaSeleccionada.month + 1);
+        proximaFecha = DateTime(
+          _fechaSeleccionada.year,
+          _fechaSeleccionada.month + 1,
+        );
       } else if (_periodoActual == 'año') {
         proximaFecha = DateTime(_fechaSeleccionada.year + 1);
       } else {
         proximaFecha = ahora;
       }
 
-      if (proximaFecha.isBefore(ahora) || proximaFecha.isAtSameMomentAs(ahora)) {
+      if (proximaFecha.isBefore(ahora) ||
+          proximaFecha.isAtSameMomentAs(ahora)) {
         setState(() {
           _fechaSeleccionada = proximaFecha;
         });
@@ -189,13 +216,133 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_periodoActual == 'día') {
       return DateFormat('EEEE, d MMMM', 'es_ES').format(_fechaSeleccionada);
     } else if (_periodoActual == 'semana') {
-      DateTime inicio = _fechaSeleccionada.subtract(Duration(days: _fechaSeleccionada.weekday - 1));
+      DateTime inicio = _fechaSeleccionada.subtract(
+        Duration(days: _fechaSeleccionada.weekday - 1),
+      );
       DateTime fin = inicio.add(const Duration(days: 6));
       return 'Semana: ${DateFormat('d MMM', 'es_ES').format(inicio)} - ${DateFormat('d MMM', 'es_ES').format(fin)}';
     } else if (_periodoActual == 'mes') {
       return DateFormat('MMMM y', 'es_ES').format(_fechaSeleccionada);
     } else {
       return DateFormat('y', 'es_ES').format(_fechaSeleccionada);
+    }
+  }
+
+  Future<void> _exportarAExcel() async {
+    try {
+      // Solicitar permisos según versión de Android
+      if (Platform.isAndroid) {
+        // Para Android 13+ (API 33)
+        var status = await Permission.manageExternalStorage.status;
+        
+        if (!status.isGranted) {
+          // Intentar con permiso de gestión de almacenamiento
+          status = await Permission.manageExternalStorage.request();
+          
+          if (!status.isGranted) {
+            // Si falla, mostrar diálogo explicativo
+            if (!mounted) return;
+            
+            final confirmar = await showDialog<bool>(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Permisos necesarios'),
+                  content: const Text(
+                    'Esta app necesita permisos de almacenamiento para guardar el archivo CSV. '
+                    '¿Deseas abrir la configuración para otorgar permisos?'
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Abrir configuración'),
+                    ),
+                  ],
+                );
+              },
+            );
+            
+            if (confirmar == true) {
+              await openAppSettings();
+            }
+            return;
+          }
+        }
+      }
+
+      final snapshot = await _movimientosRef.get();
+      
+      if (snapshot.docs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay datos para exportar')),
+        );
+        return;
+      }
+
+      // Crear CSV 
+      String csv = 'Fecha,Categoría,Monto,Tipo\n';
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final monto = (data['monto'] ?? 0).toDouble();
+        final categoria = data['categoria'] ?? 'sin categoría';
+        final fecha = (data['fecha'] as Timestamp?)?.toDate();
+        final tipo = monto > 0 ? 'Ingreso' : 'Gasto';
+
+        if (fecha != null) {
+          csv +=
+              '${DateFormat('dd/MM/yyyy').format(fecha)},$categoria,${monto.abs()},$tipo\n';
+        }
+      }
+       // Obtener directorio de descargas
+       Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Download');
+        if (!directory.existsSync()) {
+          directory = await getExternalStorageDirectory();
+        }
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo acceder al almacenamiento')),
+        );
+        return;
+      }
+
+      // Crear nombre de archivo con fecha
+      final fileName = 'movimientos_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+      final filePath = '${directory.path}/$fileName';
+      
+      // Escribir archivo
+      final file = File(filePath);
+      await file.writeAsString(csv);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Archivo guardado en:\n $filePath'),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al exportar: $e')),
+      );
     }
   }
 
@@ -220,7 +367,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    List<MapEntry<String, double>> segmentos = _gastosPorCategoria.entries.toList();
+    List<MapEntry<String, double>> segmentos =
+        _gastosPorCategoria.entries.toList();
 
     return Center(
       child: SizedBox(
@@ -259,9 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: const BoxDecoration(
-                color: Colors.purple,
-              ),
+              decoration: const BoxDecoration(color: Colors.purple),
               child: const Text(
                 'Períodos',
                 style: TextStyle(
@@ -303,6 +449,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 _cambiarPeriodo('año');
               },
             ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.file_download),
+              title: const Text('Exportar a Excel'),
+              onTap: () {
+                Navigator.pop(context);
+                _exportarAExcel();
+              },
+            ),
           ],
         ),
       ),
@@ -325,7 +480,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            
+
             Expanded(
               child: Center(
                 child: Stack(
@@ -365,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -383,10 +538,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ListaGastosScreen(
-                                fechaSeleccionada: _fechaSeleccionada,
-                                periodo: _periodoActual,
-                              ),
+                              builder:
+                                  (_) => ListaGastosScreen(
+                                    fechaSeleccionada: _fechaSeleccionada,
+                                    periodo: _periodoActual,
+                                  ),
                             ),
                           );
                           _cargarSaldo();
@@ -410,10 +566,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ListaIngresosScreen(
-                                fechaSeleccionada: _fechaSeleccionada,
-                                periodo: _periodoActual,
-                              ),
+                              builder:
+                                  (_) => ListaIngresosScreen(
+                                    fechaSeleccionada: _fechaSeleccionada,
+                                    periodo: _periodoActual,
+                                  ),
                             ),
                           );
                           _cargarSaldo();
@@ -455,36 +612,68 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  List<Widget> _buildIconosAlrededor() {
-    final List<Map<String, dynamic>> posiciones = [
-      {'categoria': 'alimentos', 'left': 157.0, 'top': -5.0},
-      {'categoria': 'transporte', 'left': 270.0, 'top': 25.0},
-      {'categoria': 'servicios', 'left': 295.0, 'top': 157.0},
-      {'categoria': 'automóvil', 'left': 270.0, 'top': 280.0},
-      {'categoria': 'facturas', 'left': 157.0, 'top': 305.0},
-      {'categoria': 'mascotas', 'left': 40.0, 'top': 280.0},
-      {'categoria': 'ropa', 'left': 15.0, 'top': 157.0},
-      {'categoria': 'familia', 'left': 40.0, 'top': 25.0},
-    ];
-
+   List<Widget> _buildIconosAlrededor() {
     List<Widget> widgets = [];
-
-    for (var pos in posiciones) {
-      String categoria = pos['categoria'];
-      Color colorCategoria = coloresCategorias[categoria] ?? Colors.grey;
-      IconData iconoCategoria = iconosCategorias[categoria] ?? Icons.category;
-
-      widgets.add(
-        Positioned(
-          left: pos['left'] as double,
-          top: pos['top'] as double,
-          child: Icon(
-            iconoCategoria,
-            color: colorCategoria,
-            size: 36,
-          ),
-        ),
-      );
+    
+    if (_gastosPorCategoria.isEmpty) {
+      // No mostrar iconos si no hay gastos
+      return widgets;
+    }
+    
+    // Calcular posiciones dentro de la barra para categorías con gastos
+    double totalGastos = _gastosPorCategoria.values.fold(0, (sum, val) => sum + val);
+    
+    final List<String> ordenCategorias = [
+      'alimentos',
+      'transporte',
+      'servicios',
+      'automóvil',
+      'facturas',
+      'mascotas',
+      'ropa',
+      'familia',
+    ];
+    
+    double startAngle = -pi / 2; // Comenzar desde arriba
+    
+    for (String categoria in ordenCategorias) {
+      if (_gastosPorCategoria.containsKey(categoria)) {
+        Color colorCategoria = coloresCategorias[categoria] ?? Colors.grey;
+        IconData iconoCategoria = iconosCategorias[categoria] ?? Icons.category;
+        
+        // Categoría con gastos - calcular posición dentro del segmento
+        double monto = _gastosPorCategoria[categoria]!;
+        double porcentaje = monto / totalGastos;
+        double sweepAngle = porcentaje * 2 * pi;
+        
+        // Verificar si hay espacio suficiente (>8% para mostrar icono dentro)
+        bool hayEspacio = porcentaje >= 0.08;
+        
+        if (hayEspacio) {
+          // Calcular ángulo en el CENTRO del segmento
+          double centroAngulo = startAngle + (sweepAngle / 2);
+          
+          // Radio para posicionar dentro de la barra (en medio del grosor)
+          double radioIcono = 105.0;
+          double iconX = 175 + radioIcono * cos(centroAngulo);
+          double iconY = 175 + radioIcono * sin(centroAngulo);
+          
+          widgets.add(
+            Positioned(
+              left: iconX - 14,
+              top: iconY - 14,
+              child: Icon(
+                iconoCategoria,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          );
+        }
+        // Si no hay espacio, simplemente no mostramos el icono
+        
+        startAngle += sweepAngle;
+      }
     }
 
     return widgets;
@@ -508,11 +697,12 @@ class _MultiColorProgressPainter extends CustomPainter {
     final radius = (size.width / 2) - (strokeWidth / 2) - 5;
 
     if (segmentos.isEmpty) {
-      final bgPaint = Paint()
-        ..color = Colors.grey[300]!
-        ..strokeWidth = strokeWidth
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
+      final bgPaint =
+          Paint()
+            ..color = Colors.grey[300]!
+            ..strokeWidth = strokeWidth
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.butt;
 
       canvas.drawCircle(center, radius, bgPaint);
       return;
@@ -546,11 +736,12 @@ class _MultiColorProgressPainter extends CustomPainter {
 
         Color color = coloresCategorias[categoria] ?? Colors.grey;
 
-        final paint = Paint()
-          ..color = color
-          ..strokeWidth = strokeWidth
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round;
+        final paint =
+            Paint()
+              ..color = color
+              ..strokeWidth = strokeWidth
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.butt;
 
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: radius),
