@@ -349,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProgressIndicator() {
     const double barraWidth = 250.0;
     const double barraHeight = 250.0;
-    const double barraStrokeWidth = 35.0;
+    const double barraStrokeWidth = 40.0;
 
     if (_gastosPorCategoria.isEmpty) {
       return Center(
@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("ControlAR"),
-        backgroundColor: Colors.purple,
+        backgroundColor: const Color(0xFFC3B9EA),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -407,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: const BoxDecoration(color: Colors.purple),
+              decoration: const BoxDecoration(color: Color(0xFF8967B3)),
               child: const Text(
                 'Períodos',
                 style: TextStyle(
@@ -499,14 +499,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               Text(
                                 "\$${_ingresosHoy.toStringAsFixed(2)}",
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 18,
                                   color: Colors.green,
                                 ),
                               ),
                               Text(
                                 "\$${_gastosHoy.toStringAsFixed(2)}",
                                 style: const TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 18,
                                   color: Colors.red,
                                 ),
                               ),
@@ -523,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -548,11 +548,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           _cargarSaldo();
                         },
                       ),
-                      const SizedBox(width: 20),
+                      const SizedBox(width: 18),
                       Text(
-                        'Saldo actual: \$${_saldoActual.toStringAsFixed(2)}',
+                        'Saldo: \$${_saldoActual.toStringAsFixed(2)}',
                         style: const TextStyle(
-                          fontSize: 22,
+                          fontSize: 25,
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
                         ),
@@ -584,22 +584,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
+                          backgroundColor: const Color(0xFFEE2835),
                           shape: const CircleBorder(),
                           padding: const EdgeInsets.all(42),
                         ),
                         onPressed: _navegarAGasto,
-                        child: const Icon(Icons.remove, color: Colors.white),
+                        child: const Icon(Icons.remove, color: Colors.white, size: 30,),
                       ),
                       const SizedBox(width: 90),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: const Color(0xFF0D9857),
                           shape: const CircleBorder(),
                           padding: const EdgeInsets.all(42),
                         ),
                         onPressed: _navegarAIngreso,
-                        child: const Icon(Icons.add, color: Colors.white),
+                        child: const Icon(Icons.add, color: Colors.white, size: 30,),
                       ),
                     ],
                   ),
@@ -645,6 +645,9 @@ class _HomeScreenState extends State<HomeScreen> {
         double monto = _gastosPorCategoria[categoria]!;
         double porcentaje = monto / totalGastos;
         double sweepAngle = porcentaje * 2 * pi;
+
+        // Calcular ángulo en el CENTRO del segmento
+          double centroAngulo = startAngle + (sweepAngle / 2);
         
         // Verificar si hay espacio suficiente (>8% para mostrar icono dentro)
         bool hayEspacio = porcentaje >= 0.08;
@@ -671,6 +674,34 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
         // Si no hay espacio, simplemente no mostramos el icono
+
+        // AGREGAR PORCENTAJE FUERA DE LA BARRA (siempre)
+        double radioPorcentaje = 145.0; // Radio fuera de la barra
+        double porcentajeX = 175 + radioPorcentaje * cos(centroAngulo);
+        double porcentajeY = 175 + radioPorcentaje * sin(centroAngulo);
+        
+        widgets.add(
+          Positioned(
+            left: porcentajeX - 15,
+            top: porcentajeY - 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: colorCategoria, width: 1),
+              ),
+              child: Text(
+                '${(porcentaje * 100).toInt()}%',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: colorCategoria,
+                ),
+              ),
+            ),
+          ),
+        );
         
         startAngle += sweepAngle;
       }
